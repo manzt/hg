@@ -261,8 +261,8 @@ def track(
 def view(
     *_tracks: Union[
         Track,
-        hgs.Tracks,
         Tuple[Track, TrackPosition],
+        hgs.Tracks,
     ],
     x: int = 0,
     y: int = 0,
