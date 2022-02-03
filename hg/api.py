@@ -1,25 +1,28 @@
 from collections import defaultdict
+from functools import wraps
 from typing import Dict, List, Optional, Tuple, TypeVar, Union, overload
-from typing_extensions import Literal
 
 import slugid
-
-from .core import (
-    CombinedTrack,
-    Data,
-    EnumTrack,
-    EnumTrackType,
-    HeatmapTrack,
-    IndependentViewportProjectionTrack,
-    Layout,
-    Lock,
-    Track,
-    Tracks,
-    ValueScaleLock,
-    View,
-    Viewconf,
+from higlass_schema import CombinedTrack as _CombinedTrack
+from higlass_schema import Data, Domain
+from higlass_schema import EnumTrack as _EnumTrack
+from higlass_schema import EnumTrackType
+from higlass_schema import HeatmapTrack as _HeatmapTrack
+from higlass_schema import (
+    IndependentViewportProjectionTrack as _IndependentViewportProjectionTrack,
 )
+from higlass_schema import Layout, LocationLocks, Lock
+from higlass_schema import Track as _Track
+from higlass_schema import Tracks, ValueScaleLock, ValueScaleLocks
+from higlass_schema import View as _View
+from higlass_schema import Viewconf as _Viewconf
+from higlass_schema import ZoomLocks
+from pydantic import BaseModel as PydanticBaseModel
+from typing_extensions import Literal
 
+from .display import renderers
+
+TrackType = Union[EnumTrackType, Literal["heatmap"]]
 TrackPosition = Literal["center", "top", "left", "bottom", "center", "whole", "gallery"]
 
 _track_default_position: Dict[str, TrackPosition] = {
@@ -48,11 +51,200 @@ _track_default_position: Dict[str, TrackPosition] = {
     "viewport-projection-horizontal": "top",
 }
 
-TrackType = Union[EnumTrackType, Literal["heatmap"]]
+# Switch pydantic defaults
+class BaseModel(PydanticBaseModel):
+    class Config:
+        # wether __setattr__ should perform validation
+        validate_assignment = True
+
+    # nice repr if printing with rich
+    def __rich_repr__(self):
+        return self.__iter__()
+
+    # Omit fields which are None by default.
+    @wraps(PydanticBaseModel.dict)
+    def dict(self, exclude_none: bool = True, **kwargs):
+        return super().dict(exclude_none=exclude_none, **kwargs)
+
+    # Omit fields which are None by default.
+    @wraps(PydanticBaseModel.json)
+    def json(self, exclude_none: bool = True, **kwargs):
+        return super().json(exclude_none=exclude_none, **kwargs)
+
+
+ModelT = TypeVar("ModelT", bound=PydanticBaseModel)
+
+
+def _copy_unique(model: ModelT) -> ModelT:
+    copy = model.__class__(**model.dict())
+    if hasattr(copy, "uid"):
+        setattr(copy, "uid", str(slugid.nice()))
+    return copy
+
+
+T = TypeVar("T")
+
+
+def _ensure_list(x: Union[None, T, List[T]]) -> List[T]:
+    if x is None:
+        return []
+    return x if isinstance(x, list) else [x]
+
+
+class _PropertiesMixin:
+    def properties(self: ModelT, inplace: bool = False, **fields) -> ModelT:  # type: ignore
+        model = self if inplace else _copy_unique(self)
+        for k, v in fields.items():
+            setattr(model, k, v)
+        return model
+
+
+TrackT = TypeVar("TrackT", bound=_Track)
+
+
+class _OptionsMixin:
+    def opts(self: TrackT, inplace: bool = False, **options) -> TrackT:  # type: ignore
+        track = self if inplace else _copy_unique(self)
+        if track.options is None:
+            track.options = {}
+        track.options.update(options)
+        return track
+
+
+class EnumTrack(_EnumTrack, _OptionsMixin, _PropertiesMixin):
+    ...
+
+
+class HeatmapTrack(_HeatmapTrack, _OptionsMixin, _PropertiesMixin):
+    ...
+
+
+class IndependentViewportProjectionTrack(
+    _IndependentViewportProjectionTrack, _OptionsMixin, _PropertiesMixin
+):
+    ...
+
+
+class CombinedTrack(_CombinedTrack, _OptionsMixin, _PropertiesMixin):
+    ...
+
+
+Track = Union[
+    EnumTrack,
+    HeatmapTrack,
+    IndependentViewportProjectionTrack,
+    CombinedTrack,
+]
+
+
+class View(_View[Track], _PropertiesMixin):
+    def domain(
+        self,
+        x: Optional[Domain] = None,
+        y: Optional[Domain] = None,
+        inplace: bool = False,
+    ):
+        view = self if inplace else _copy_unique(self)
+        if x is not None:
+            view.initialXDomain = x
+        if y is not None:
+            view.initialYDomain = y
+        return view
+
+    # TODO: better name? adjust_layout, resize
+    def move(
+        self,
+        x: Optional[int] = None,
+        y: Optional[int] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        inplace: bool = False,
+    ):
+        view = self if inplace else _copy_unique(self)
+        if x is not None:
+            view.layout.x = x
+        if y is not None:
+            view.layout.y = y
+        if width is not None:
+            view.layout.w = width
+        if height is not None:
+            view.layout.h = height
+        return view
+
+
+class Viewconf(_Viewconf[View], _PropertiesMixin):
+    def _repr_mimebundle_(self, include=None, exclude=None):
+        renderer = renderers.get()
+        return renderer(self.json())
+
+    def display(self):
+        """Render top-level chart using IPython.display."""
+        from IPython.display import display
+
+        display(self)
+
+    def properties(self, inplace: bool = False, **kwargs):
+        conf = self if inplace else _copy_unique(self)
+        for k, v in kwargs.items():
+            setattr(conf, k, v)
+        return conf
+
+    def locks(
+        self,
+        *locks: Union[Lock, ValueScaleLock],
+        zoom: Optional[Union[List[Lock], Lock]] = None,
+        location: Optional[Union[List[Lock], Lock]] = None,
+        value_scale: Optional[Union[List[ValueScaleLock], ValueScaleLock]] = None,
+        inplace: bool = False,
+    ):
+        conf = self if inplace else _copy_unique(self)
+
+        zoom = _ensure_list(zoom)
+        location = _ensure_list(location)
+        value_scale = _ensure_list(value_scale)
+
+        shared_locks: List[Lock] = []
+        for lock in locks:
+            if isinstance(lock, Lock):
+                shared_locks.append(lock)
+            else:
+                value_scale.append(lock)
+
+        zoom.extend(shared_locks)
+        location.extend(shared_locks)
+
+        if conf.zoomLocks is None:
+            conf.zoomLocks = ZoomLocks()
+
+        for lock in zoom:
+            assert isinstance(lock.uid, str)
+            conf.zoomLocks.locksDict[lock.uid] = lock
+            for vuid, _ in lock:
+                conf.zoomLocks.locksByViewUid[vuid] = lock.uid
+
+        if conf.locationLocks is None:
+            conf.locationLocks = LocationLocks()
+
+        for lock in location:
+            assert isinstance(lock.uid, str)
+            conf.locationLocks.locksDict[lock.uid] = lock
+            for vuid, _ in lock:
+                conf.locationLocks.locksByViewUid[vuid] = lock.uid
+
+        if conf.valueScaleLocks is None:
+            conf.valueScaleLocks = ValueScaleLocks()
+
+        for lock in value_scale:
+            assert isinstance(lock.uid, str)
+            conf.valueScaleLocks.locksDict[lock.uid] = lock
+            for vuid, _ in lock:
+                conf.valueScaleLocks.locksByViewUid[vuid] = lock.uid
+
+        return conf
 
 
 def track(
-    type: TrackType,
+    type_: TrackType,
     uid: Optional[str] = None,
     fromViewUid: Optional[str] = None,
     **kwargs,
@@ -61,7 +253,7 @@ def track(
         uid = str(slugid.nice())
 
     if (
-        type
+        type_
         in {
             "viewport-projection-horizontal",
             "viewport-projection-vertical",
@@ -70,17 +262,21 @@ def track(
         and fromViewUid is None
     ):
         return IndependentViewportProjectionTrack(
-            type=type, uid=uid, fromViewUid=fromViewUid, **kwargs  # type: ignore
+            type=type_, uid=uid, fromViewUid=fromViewUid, **kwargs  # type: ignore
         )
 
-    if type == "heatmap":
-        return HeatmapTrack(type=type, uid=uid, **kwargs)
+    if type_ == "heatmap":
+        return HeatmapTrack(type=type_, uid=uid, **kwargs)
 
-    return EnumTrack(type=type, uid=uid, **kwargs)
+    return EnumTrack(type=type_, uid=uid, **kwargs)
 
 
 def view(
-    *_tracks: Union[Track, Tracks, Tuple[Track, TrackPosition]],
+    *_tracks: Union[
+        Union[Track, _Track],
+        Tracks,
+        Tuple[Track, TrackPosition],
+    ],
     x: int = 0,
     y: int = 0,
     width: int = 12,
@@ -195,7 +391,7 @@ def project(
     else:
         raise ValueError("Not possible")
 
-    return track(type=track_type, fromViewUid=fromViewUid, **kwargs)
+    return track(type_=track_type, fromViewUid=fromViewUid, **kwargs)
 
 
 def viewconf(
