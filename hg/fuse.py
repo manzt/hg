@@ -1,5 +1,5 @@
-from fsspec.asyn import sync, sync_wrapper
-from fsspec.implementations.http import HTTPFile, HTTPFileSystem, HTTPStreamFile
+from fsspec.asyn import sync_wrapper
+from fsspec.implementations.http import HTTPFileSystem
 
 
 def is_url(url: str):
@@ -16,10 +16,9 @@ def to_url(path: str) -> str:
     elif path.startswith("/https/"):
         path = "https://" + path[7:]
 
-    if path[-2:] == "..":
-        path = path[:-2]
+    assert path[-2:] == ".."
 
-    return path
+    return path[:-2]
 
 
 class GlobalHTTPFileSystem(HTTPFileSystem):
@@ -29,10 +28,13 @@ class GlobalHTTPFileSystem(HTTPFileSystem):
 
     cat_file = sync_wrapper(_cat_file)
 
-    async def _info(self, path, _force_file=False, **kwargs):
-        if not _force_file and self.isdir(path):
-            return {"name": path, "size": None, "type": "directory"}
-        url = to_url(path)
+    async def _info(self, path, _path_normalized=False, **kwargs):
+        if not _path_normalized:
+            if self.isdir(path):
+                return {"name": path, "size": None, "type": "directory"}
+            url = to_url(path)
+        else:
+            url = path
         return await super()._info(url, **kwargs)
 
     info = sync_wrapper(_info)
@@ -40,14 +42,19 @@ class GlobalHTTPFileSystem(HTTPFileSystem):
     def ls(self, path, detail=False, **kwargs):
         if not self.isdir(path):
             raise ValueError("Path is a directory")
-        return []
+        if path != "/":
+            return []
+        out = ["http/", "https/"]
+        if detail:
+            return [{"name": u, "size": None, "type": "directory"} for u in out]
+        return out
 
     def isdir(self, path):
-        return path == "/" or path[-2:] != ".."
+        return path[-2:] != ".."
 
     # modified from fsspec.implementations.http.HTTPFileSystem
     def _open(self, path, **kwargs):
         url = to_url(path)
-        return super()._open(url, _force_file=True, **kwargs)
+        return super()._open(url, _path_normalized=True, **kwargs)
 
     # fsspec.fuse.run( GlobalHTTPFileSystem(), '/', '/home/manzt/github/fuse/mnt/')

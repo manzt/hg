@@ -1,6 +1,5 @@
 import logging
 
-import fsspec.fuse
 from rich import print
 from rich.logging import RichHandler
 
@@ -22,5 +21,13 @@ if __name__ == "__main__":
     print(
         fs.info("/http/example.com")
     )
+    print(
+        fs.info("/http/example.com..")
+    )
+    print(
+        fs.cat("/http/example.com..")
+    )
+    print(fs.ls("/", True))
 
-    print(fs.ls("/"))
+    with fs.open("/http/example.com..") as f:
+        print(f)
