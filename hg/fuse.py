@@ -2,13 +2,11 @@ from fsspec.asyn import sync_wrapper
 from fsspec.implementations.http import HTTPFileSystem
 
 
-def is_url(url: str):
-    return url.startswith("http://") or url.startswith("https://")
-
-
 def to_url(path: str) -> str:
-    if is_url(path):
-        return path
+    if path[-2:] != "..":
+        raise FileNotFoundError(path)
+
+    path = path[:-2]
 
     if path.startswith("/http/"):
         path = "http://" + path[6:]
@@ -16,9 +14,15 @@ def to_url(path: str) -> str:
     elif path.startswith("/https/"):
         path = "https://" + path[7:]
 
-    assert path[-2:] == ".."
+    return path
 
-    return path[:-2]
+
+def direntry(name: str):
+    return {
+        "name": name,
+        "size": None,
+        "type": "directory",
+    }
 
 
 class GlobalHTTPFileSystem(HTTPFileSystem):
@@ -28,33 +32,29 @@ class GlobalHTTPFileSystem(HTTPFileSystem):
 
     cat_file = sync_wrapper(_cat_file)
 
-    async def _info(self, path, _path_normalized=False, **kwargs):
-        if not _path_normalized:
-            if self.isdir(path):
-                return {"name": path, "size": None, "type": "directory"}
-            url = to_url(path)
-        else:
-            url = path
+    async def _info(self, path, **kwargs):
+        if self.isdir(path):
+            return direntry(path)
+        url = to_url(path)
         return await super()._info(url, **kwargs)
 
     info = sync_wrapper(_info)
 
     def ls(self, path, detail=False, **kwargs):
         if not self.isdir(path):
-            raise ValueError("Path is a directory")
+            raise NotADirectoryError(path)
         if path != "/":
             return []
-        out = ["http/", "https/"]
+        dirs = ["http/", "https/"]
         if detail:
-            return [{"name": u, "size": None, "type": "directory"} for u in out]
-        return out
+            return [direntry(n) for n in dirs]
+        return dirs
 
     def isdir(self, path):
         return path[-2:] != ".."
 
     # modified from fsspec.implementations.http.HTTPFileSystem
     def _open(self, path, **kwargs):
-        url = to_url(path)
-        return super()._open(url, _path_normalized=True, **kwargs)
-
-    # fsspec.fuse.run( GlobalHTTPFileSystem(), '/', '/home/manzt/github/fuse/mnt/')
+        f = super()._open(path, **kwargs)
+        f.url = to_url(f.path)
+        return f
