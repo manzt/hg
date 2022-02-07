@@ -47,20 +47,22 @@ class GlobalHTTPFileSystem(HTTPFileSystem):
         file.url = path_to_url(file.path)
         return file
 
+
 def run(mount_point: str):
     # GlobalHTTPFileSystem instance isn't fork-safe,
     # so need to create instance within process target.
     fs = GlobalHTTPFileSystem()
     fsspec.fuse.run(fs, "/", mount_point)
 
+
 class FuseProcess:
     def __init__(self):
-        self._p: Optional[mp.Process] = None
+        self._fuse_process: Optional[mp.Process] = None
         self._mount_point: Optional[str] = None
 
     def start(self, mount_point: str):
         # no need to restart
-        if self._p and mount_point == self._mount_point:
+        if self._fuse_process and mount_point == self._mount_point:
             return
 
         self.stop()
@@ -71,8 +73,8 @@ class FuseProcess:
             mount_point
         ), f"mount directory doesn't exist: {mount_point}"
 
-        self._p = mp.Process(target=run, args=(mount_point,), daemon=True)
-        self._p.start()
+        self._fuse_process = mp.Process(target=run, args=(mount_point,), daemon=True)
+        self._fuse_process.start()
 
         max_iters = 10
         for i in range(max_iters):
@@ -88,9 +90,9 @@ class FuseProcess:
             time.sleep(0.5)
 
     def stop(self):
-        if self._p:
-            self._p.terminate()
-            self._p = None
+        if self._fuse_process:
+            self._fuse_process.terminate()
+            self._fuse_process = None
 
         # TODO: more teardown?
 
