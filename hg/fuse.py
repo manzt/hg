@@ -89,6 +89,8 @@ class FuseProcess:
 
             time.sleep(0.5)
 
+        self._mount_point = mount_point
+
     def stop(self):
         if self._fuse_process:
             self._fuse_process.terminate()
@@ -97,8 +99,10 @@ class FuseProcess:
         # TODO: more teardown?
 
     def path(self, href: str):
+        if self._mount_point is None:
+            raise RuntimeError("FUSE processes not started")
         url = urlparse(href)
-        return f"/{url.scheme}/{url.netloc}{url.path}.."
+        return os.path.join(self._mount_point, f"{url.scheme}/{url.netloc}{url.path}..")
 
 
 def path_to_url(path: str) -> str:
