@@ -23,6 +23,16 @@ class HgServer:
             self._provider.stop()
         self._resources = {}
 
+    def enable_proxy(self, urlprefix: str = ".."):
+        if not self._provider:
+            raise RuntimeError("Server not started.")
+        self._provider.urlprefix = urlprefix
+
+    def disable_proxy(self):
+        if not self._provider:
+            raise RuntimeError("Server not started.")
+        self._provider.urlprefix = None
+
     def add(
         self,
         tileset: LocalTileset,
