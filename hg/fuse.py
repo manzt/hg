@@ -1,8 +1,6 @@
 import logging
 import multiprocessing as mp
-import os
 import pathlib
-import platform
 import time
 from errno import ENOENT
 from typing import List, Optional, Union
@@ -20,6 +18,7 @@ logger = logging.getLogger("hg.fuse")
 class MultiHttpFs(LoggingMixIn, Operations):
     def __init__(self, schemas: List[FsName], **kwargs):
         logger.info("Starting FUSE at /")
+        assert len(schemas) > 0, "must provide at least one schema"
         self.fs = {schema: HttpFs(schema, **kwargs) for schema in schemas}
 
     def _deref(self, path: str):
@@ -120,7 +119,8 @@ class FuseProcess:
     def stop(self):
         if self._fuse_process is None:
             return
-        logger.debug("Stopping FUSE running at %s", self._tmp_dir)
+
+        logger.info("Stopping FUSE running at %s", self._tmp_dir)
 
         self._fuse_process.terminate()
         self._fuse_process = None
