@@ -1,15 +1,16 @@
 import logging
 import multiprocessing as mp
-import os
 import pathlib
+import platform
 import time
 from errno import ENOENT
 from typing import List, Optional, Union
-from typing_extensions import Literal
 from urllib.parse import urlparse
+import os
 
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
 from simple_httpfs import HttpFs
+from typing_extensions import Literal
 
 FsName = Literal["http", "https", "ftp"]
 
@@ -68,6 +69,9 @@ def run(mount_point: str, disk_cache_dir: str):
 
 
 class FuseProcess:
+    _mnt_name = "schemas"
+    _dircache_name = "cache"
+
     def __init__(self):
         self._fuse_process: Optional[mp.Process] = None
         self._tmp_dir: Optional[pathlib.Path] = None
@@ -82,8 +86,8 @@ class FuseProcess:
 
         assert tmp_dir.is_dir(), f"mount dir doesn't exist: {tmp_dir}"
 
-        mount_point = tmp_dir / "mnt"
-        disk_cache_dir = tmp_dir / "dc"
+        mount_point = tmp_dir / self._mnt_name
+        disk_cache_dir = tmp_dir / self._dircache_name
 
         if not mount_point.exists():
             mount_point.mkdir()
@@ -99,7 +103,7 @@ class FuseProcess:
         for i in range(max_iters):
 
             # wait until http is mounted
-            if os.path.exists(os.path.join(mount_point, "http")):
+            if (mount_point / "http").exists():
                 break
 
             if i == max_iters - 1:
@@ -108,17 +112,33 @@ class FuseProcess:
 
             time.sleep(0.5)
 
-        self._mount_point = mount_point
+        self._tmp_dir = tmp_dir
 
     def stop(self):
-        if self._fuse_process:
-            self._fuse_process.terminate()
-            self._fuse_process = None
+        if self._fuse_process is None:
+            return
 
-        # TODO: more teardown?
+        self._fuse_process.terminate()
+        self._fuse_process = None
+
+        assert self._tmp_dir is not None
+
+        # stop fuse if killing process didn't do anything
+        if (self._tmp_dir / self._mnt_name / "http").exists():
+            cmd = "unmount" if platform.system() == "Darwin" else "fusermount -uz"
+            os.system(f"{cmd} {self._tmp_dir / self._mnt_name}")
+
+        self._tmp_dir = None
+
+        # TODO: remove cache and mount dirs?
+
 
     def path(self, href: str):
-        if self._mount_point is None:
+        if self._tmp_dir is None:
             raise RuntimeError("FUSE processes not started")
         url = urlparse(href)
-        return str(self._mount_point / f"{url.scheme}/{url.netloc}{url.path}..")
+        return str(
+            self._tmp_dir /
+            self._mnt_name /
+            f"{url.scheme}/{url.netloc}{url.path}.."
+        )
