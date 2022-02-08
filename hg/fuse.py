@@ -1,12 +1,12 @@
 import logging
 import multiprocessing as mp
+import os
 import pathlib
 import platform
 import time
 from errno import ENOENT
 from typing import List, Optional, Union
 from urllib.parse import urlparse
-import os
 
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
 from simple_httpfs import HttpFs
@@ -80,6 +80,7 @@ class FuseProcess:
         # no need to restart
         tmp_dir = pathlib.Path(tmp_dir).absolute()
         if self._fuse_process and tmp_dir == self._tmp_dir:
+            logger.debug("Skipping start. FUSE running in same directory %s", tmp_dir)
             return
 
         self.stop()
@@ -94,6 +95,8 @@ class FuseProcess:
 
         if not disk_cache_dir.exists():
             disk_cache_dir.mkdir()
+
+        logger.info("Starting FUSE mount at %s", mount_point)
 
         args = (str(mount_point) + "/", str(disk_cache_dir) + "/")
         self._fuse_process = mp.Process(target=run, args=args, daemon=True)
@@ -117,28 +120,19 @@ class FuseProcess:
     def stop(self):
         if self._fuse_process is None:
             return
+        logger.debug("Stopping FUSE running at %s", self._tmp_dir)
 
         self._fuse_process.terminate()
         self._fuse_process = None
-
-        assert self._tmp_dir is not None
-
-        # stop fuse if killing process didn't do anything
-        if (self._tmp_dir / self._mnt_name / "http").exists():
-            cmd = "unmount" if platform.system() == "Darwin" else "fusermount -uz"
-            os.system(f"{cmd} {self._tmp_dir / self._mnt_name}")
-
         self._tmp_dir = None
 
         # TODO: remove cache and mount dirs?
-
+        # make sure stuff is no longer mounted
 
     def path(self, href: str):
         if self._tmp_dir is None:
             raise RuntimeError("FUSE processes not started")
         url = urlparse(href)
         return str(
-            self._tmp_dir /
-            self._mnt_name /
-            f"{url.scheme}/{url.netloc}{url.path}.."
+            self._tmp_dir / self._mnt_name / f"{url.scheme}/{url.netloc}{url.path}.."
         )
