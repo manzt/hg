@@ -95,8 +95,8 @@ def create_tileset_route(tileset_resources: MutableMapping[str, LocalTileset]):
     return starlette.routing.Mount(
         "/api/v1",
         routes=[
-            starlette.routing.Route("/tileset_info", endpoint=tileset_info),
-            starlette.routing.Route("/tiles", endpoint=tiles),
+            starlette.routing.Route("/tileset_info/", endpoint=tileset_info),
+            starlette.routing.Route("/tiles/", endpoint=tiles),
         ],
     )
 
