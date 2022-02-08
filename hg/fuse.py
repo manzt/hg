@@ -1,79 +1,110 @@
+import logging
 import multiprocessing as mp
 import os
+import pathlib
 import time
-from typing import Optional
+from errno import ENOENT
+from typing import List, Literal, Optional, Union
 from urllib.parse import urlparse
 
-import fsspec.fuse
-from fsspec.asyn import sync_wrapper
-from fsspec.implementations.http import HTTPFileSystem
+from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
+from simple_httpfs import HttpFs
+
+FsName = Literal["http", "https", "ftp"]
+
+logger = logging.getLogger("hg.fuse")
 
 
-class GlobalHTTPFileSystem(HTTPFileSystem):
-    def _cat_file(self, url, **kwargs):
-        url = path_to_url(url)
-        return super()._cat_file(url, **kwargs)
+class MultiHttpFs(LoggingMixIn, Operations):
+    def __init__(
+        self,
+        schemas: List[FsName],
+        **kwargs,
+    ):
+        logger.info("Starting FUSE at /")
+        self.fs = {schema: HttpFs(schema, **kwargs) for schema in schemas}
 
-    cat_file = sync_wrapper(_cat_file)
+    def _deref(self, path: str):
+        root, *rest = path.lstrip("/").split("/")
+        if len(rest) == 1 and rest[0] == "":
+            # path == "/http/", "/https/", "/ftp/"
+            raise FuseOSError(ENOENT)
+        try:
+            fs = self.fs[root]
+        except KeyError:
+            raise FuseOSError(ENOENT)
+        return fs, "/" + "/".join(rest)
 
-    async def _info(self, path, **kwargs):
-        if self.isdir(path):
-            return direntry(path)
-        url = path_to_url(path)
-        entry = await super()._info(url, **kwargs)
-        # rename name with filesystem name (not url)
-        entry["name"] = path
-        return entry
+    def getattr(self, path, fh=None):
+        logger.debug("getattr %s", path)
+        if path == "/":
+            first = next(iter(self.fs.values()))
+            return first.getattr("/", fh)
+        fs, path = self._deref(path)
+        return fs.getattr(path, fh)
 
-    info = sync_wrapper(_info)
+    def read(self, path, size, offset, fh):
+        logger.debug("read %s", (path, size, offset))
+        fs, path = self._deref(path)
+        return fs.read(path, size, offset, fh)
 
-    def ls(self, path, detail=False, **kwargs):
-        if not self.isdir(path):
+    def readdir(self, path, fh):
+        logger.debug("readdir %s", path)
+        if path[-2:] == "..":
             raise NotADirectoryError(path)
-        if path != "/":
-            return []
-        dirs = ["http/", "https/"]
-        if detail:
-            return [direntry(n) for n in dirs]
-        return dirs
+        files = list(self.fs) if path == "/" else []
+        return [".", ".."] + files
 
-    def isdir(self, path):
-        return path[-2:] != ".."
+    def unlink(self, path):
+        return 0
 
-    # modified from fsspec.implementations.http.HTTPFileSystem
-    def _open(self, path, **kwargs):
-        file = super()._open(path, **kwargs)
-        # override HTTPFile/HTTPStreamFile url with real url
-        file.url = path_to_url(file.path)
-        return file
+    def create(self, path, mode, fi=None):
+        return 0
+
+    def write(self, path, buf, size, offset, fip):
+        return 0
+
+    def destroy(self, path):
+        for fs in self.fs.values():
+            fs.destroy(path)
 
 
-def run(mount_point: str):
-    # GlobalHTTPFileSystem instance isn't fork-safe,
-    # so need to create instance within process target.
-    fs = GlobalHTTPFileSystem()
-    fsspec.fuse.run(fs, "/", mount_point)
+def run(mount_point: str, disk_cache_dir: str):
+    fs = MultiHttpFs(
+        ["http", "https"],
+        disk_cache_size=2**25,
+        disk_cache_dir=disk_cache_dir,
+        lru_capacity=400,
+    )
+    FUSE(fs, mount_point, foreground=True)
 
 
 class FuseProcess:
     def __init__(self):
         self._fuse_process: Optional[mp.Process] = None
-        self._mount_point: Optional[str] = None
+        self._tmp_dir: Optional[pathlib.Path] = None
 
-    def start(self, mount_point: str):
+    def start(self, tmp_dir: Union[str, pathlib.Path]):
         # no need to restart
-        if self._fuse_process and mount_point == self._mount_point:
+        tmp_dir = pathlib.Path(tmp_dir).absolute()
+        if self._fuse_process and tmp_dir == self._tmp_dir:
             return
 
         self.stop()
 
-        mount_point = mount_point.rstrip("/") + "/"
-        assert os.path.isabs(mount_point), "must provide an absolute path"
-        assert os.path.isdir(
-            mount_point
-        ), f"mount directory doesn't exist: {mount_point}"
+        assert tmp_dir.is_dir(), f"mount dir doesn't exist: {tmp_dir}"
 
-        self._fuse_process = mp.Process(target=run, args=(mount_point,), daemon=True)
+        mount_point = tmp_dir / "mnt"
+        disk_cache_dir = tmp_dir / "dc"
+
+        if not mount_point.exists():
+            mount_point.mkdir()
+
+        if not disk_cache_dir.exists():
+            disk_cache_dir.mkdir()
+
+        args = (str(mount_point) + "/", str(disk_cache_dir) + "/")
+        self._fuse_process = mp.Process(target=run, args=args, daemon=True)
         self._fuse_process.start()
 
         max_iters = 10
@@ -102,27 +133,4 @@ class FuseProcess:
         if self._mount_point is None:
             raise RuntimeError("FUSE processes not started")
         url = urlparse(href)
-        return os.path.join(self._mount_point, f"{url.scheme}/{url.netloc}{url.path}..")
-
-
-def path_to_url(path: str) -> str:
-    if path[-2:] != "..":
-        raise FileNotFoundError(path)
-
-    path = path[:-2]
-
-    if path.startswith("/http/"):
-        path = "http://" + path[6:]
-
-    elif path.startswith("/https/"):
-        path = "https://" + path[7:]
-
-    return path
-
-
-def direntry(name: str):
-    return {
-        "name": name,
-        "size": None,
-        "type": "directory",
-    }
+        return str(self._mount_point / f"{url.scheme}/{url.netloc}{url.path}..")
