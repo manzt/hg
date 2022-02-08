@@ -17,11 +17,7 @@ logger = logging.getLogger("hg.fuse")
 
 
 class MultiHttpFs(LoggingMixIn, Operations):
-    def __init__(
-        self,
-        schemas: List[FsName],
-        **kwargs,
-    ):
+    def __init__(self, schemas: List[FsName], **kwargs):
         logger.info("Starting FUSE at /")
         self.fs = {schema: HttpFs(schema, **kwargs) for schema in schemas}
 
@@ -55,15 +51,6 @@ class MultiHttpFs(LoggingMixIn, Operations):
             raise NotADirectoryError(path)
         files = list(self.fs) if path == "/" else []
         return [".", ".."] + files
-
-    def unlink(self, path):
-        return 0
-
-    def create(self, path, mode, fi=None):
-        return 0
-
-    def write(self, path, buf, size, offset, fip):
-        return 0
 
     def destroy(self, path):
         for fs in self.fs.values():
