@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger("hg.fuse")
 
+
 class FuseProcess:
     _mnt_name = "schemas"
     _dircache_name = "cache"
@@ -17,7 +18,6 @@ class FuseProcess:
 
     def start(self, tmp_dir: Union[str, pathlib.Path]):
         from .httpfs import run
-
 
         # no need to restart
         tmp_dir = pathlib.Path(tmp_dir).absolute()

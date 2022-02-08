@@ -10,6 +10,7 @@ FsName = Literal["http", "https", "ftp"]
 
 logger = logging.getLogger("hg.httpfs")
 
+
 class MultiHttpFs(LoggingMixIn, Operations):
     def __init__(self, schemas: List[FsName], **kwargs):
         logger.info("Starting FUSE at /")
