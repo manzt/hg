@@ -4,7 +4,8 @@ import os
 import pathlib
 import time
 from errno import ENOENT
-from typing import List, Literal, Optional, Union
+from typing import List, Optional, Union
+from typing_extensions import Literal
 from urllib.parse import urlparse
 
 from fuse import FUSE, FuseOSError, LoggingMixIn, Operations
