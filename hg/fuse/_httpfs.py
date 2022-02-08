@@ -8,7 +8,7 @@ from typing_extensions import Literal
 
 FsName = Literal["http", "https", "ftp"]
 
-logger = logging.getLogger("hg.httpfs")
+logger = logging.getLogger("hg.fuse")
 
 
 class MultiHttpFs(LoggingMixIn, Operations):
