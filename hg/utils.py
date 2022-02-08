@@ -1,12 +1,9 @@
-from typing import Union, Dict, TypeVar, Optional, List
-
-from typing_extensions import Literal
-
-from pydantic import BaseModel
-import slugid
+from typing import Dict, List, Optional, TypeVar, Union
 
 import higlass_schema as hgs
-
+import slugid
+from pydantic import BaseModel
+from typing_extensions import Literal
 
 T = TypeVar("T")
 ModelT = TypeVar("ModelT", bound=BaseModel)

@@ -26,6 +26,12 @@ class HgServer:
     def enable_proxy(self, urlprefix: str = ".."):
         if not self._provider:
             raise RuntimeError("Server not started.")
+        try:
+            import jupyter_server_proxy
+        except ImportError as e:
+            raise ImportError(
+                'Install "jupyter-server-proxy" to enable server proxying.'
+            ) from e
         self._provider.urlprefix = urlprefix
 
     def disable_proxy(self):

@@ -132,7 +132,7 @@ class TilesetProvider(BackgroundServer):
             urlprefix = os.environ.get("JUPYTERHUB_SERVICE_PREFIX")
 
         if urlprefix is not None:
-            urlprefix = urlprefix.rstrip('/')
+            urlprefix = urlprefix.rstrip("/")
             return f"{urlprefix}/proxy/{self.port}"
 
         return f"http://localhost:{self.port}"
