@@ -136,3 +136,6 @@ class FuseProcess:
         return str(
             self._tmp_dir / self._mnt_name / f"{url.scheme}/{url.netloc}{url.path}.."
         )
+
+
+fuse = FuseProcess()
