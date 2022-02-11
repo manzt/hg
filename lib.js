@@ -1,12 +1,14 @@
-function loadCss(url) {
-	let link = document.createElement("link");
-	link.type = "text/css";
-	link.rel = "stylesheet";
-	link.href = url;
-	document.getElementsByTagName("head")[0].appendChild(link);
-}
+import hgcss from "higlass/dist/hglib.css";
 
-loadCss("https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css");
-loadCss("http://unpkg.com/higlass@1.11/dist/hglib.css");
+let styles = Object.assign(
+	document.createElement("style"),
+	{
+		type: "text/css",
+		rel: "stylesheet",
+		innerText: hgcss,
+	}
+);
+
+document.getElementsByTagName("head")[0].appendChild(styles)
 
 export * as hglib from "higlass";
