@@ -1,4 +1,4 @@
-function extractLocation({ xDomain, yDomain }) {
+function toPts({ xDomain, yDomain }) {
 	let [x, xe] = xDomain;
 	let [y, ye] = yDomain;
 	return [x, xe, y, ye];
@@ -7,8 +7,6 @@ function extractLocation({ xDomain, yDomain }) {
 define(["@jupyter-widgets/base"], function (base) {
 	// hack to let us use an ES module
 	return import("./lib.js").then(({ hglib }) => {
-		// export hglib globally... for plugins?
-		window.hglib = hglib;
 
 		class HgModel extends base.DOMWidgetModel {}
 
@@ -21,13 +19,13 @@ define(["@jupyter-widgets/base"], function (base) {
 				this.model.on('msg:custom', msg => {
 					msg = JSON.parse(msg);
 					let [fn, ...args] = msg;
-					api[fn]?.(...args);
+					api[fn](...args);
 				});
 
 				if (viewconf.views.length === 1) {
 
 					api.on('location', loc => {
-						this.model.set('location', extractLocation(loc))
+						this.model.set('location', toPts(loc))
 						this.model.save_changes();
 					}, viewconf.views[0].uid);
 
@@ -36,7 +34,7 @@ define(["@jupyter-widgets/base"], function (base) {
 					viewconf.views.forEach((view, idx) => {
 						api.on('location', loc => {
 							let copy = this.model.get('location').slice();
-							copy[idx] = extractLocation(loc);
+							copy[idx] = toPts(loc);
 							this.model.set('location', copy);
 							this.model.save_changes();
 						}, view.uid);

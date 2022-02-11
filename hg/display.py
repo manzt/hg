@@ -10,12 +10,10 @@ HTML_TEMPLATE = jinja2.Template(
 <!DOCTYPE html>
 <html>
 <head>
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
   <link rel="stylesheet" href="{{ base_url }}/higlass@{{ higlass_version }}/dist/hglib.css">
   <script src="{{ base_url }}/react@{{ react_version }}/umd/react.production.min.js"></script>
   <script src="{{ base_url }}/react-dom@{{ react_version }}/umd/react-dom.production.min.js"></script>
   <script src="{{ base_url }}/pixi.js@{{ pixijs_version }}/dist/browser/pixi.min.js"></script>
-  <script src="{{ base_url }}/react-bootstrap@{{ react_bootstrap_version }}/dist/react-bootstrap.min.js"></script>
 </head>
 <body>
   <div id="{{ output_div }}"></div>
