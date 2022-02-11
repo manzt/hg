@@ -1,7 +1,7 @@
 {
   "version": "0.0.0",
   "scripts": {
-    "build": "esbuild --bundle --format=esm --loader:.css=text --outfile=share/jupyter/nbextensions/hg/lib.js lib.js",
+    "build": "esbuild --bundle --minify --format=esm --loader:.css=text --outfile=share/jupyter/nbextensions/hg/lib.js lib.js",
     "watch": "pnpm build -- --watch"
   },
   "homepage": "https://github.com/manzt/hg#readme",

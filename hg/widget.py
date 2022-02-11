@@ -1,7 +1,8 @@
 import json
+from collections import defaultdict
 from typing import Union
 
-from .api import Viewconf, View
+from .api import Viewconf, View, TrackT
 
 try:
     import ipywidgets
@@ -29,6 +30,25 @@ class HgWidget(ipywidgets.DOMWidget):
         super().__init__(**kwargs)
         self._viewconf = viewconf.json()
 
+        self._mapping = defaultdict(list)
+        for view in viewconf.views:
+            for _, track in view.tracks:
+                self._mapping[track.uid].append(view.uid)
+
+
+    def reload(self, *items: Union[View, TrackT]):
+        selectors = []
+        for i in items:
+            if isinstance(i, View):
+                selectors.append(i.uid)
+            else:
+                for vuid in self._mapping[i.uid]:
+                    sel = dict(viewId=vuid, trackId=i.uid)
+                    selectors.append(sel)
+
+        msg = json.dumps(["reload", selectors])
+        self.send(msg)
+
 
     def zoom_to(
         self,
@@ -41,7 +61,7 @@ class HgWidget(ipywidgets.DOMWidget):
     ):
         uid = view if isinstance(view, str) else view.uid
         assert uid is not None, "must provide a view uid"
-        msg = ["zoomTo", uid, start1, end1, start2, end2, animate_time]
-        self.send(json.dumps(msg))
+        msg = json.dumps(["zoomTo", uid, start1, end1, start2, end2, animate_time])
+        self.send(msg)
 
 
