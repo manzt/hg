@@ -1,3 +1,5 @@
+import sys
+
 try:
     from ._version import version as __version__
 except ImportError:
@@ -8,6 +10,14 @@ from higlass_schema import *
 from .api import *  # overrides classes with same name from higlass_schema
 from .fuse import fuse
 from .server import server
+
+try:
+    if "google.colab" in sys.modules:
+        from google.colab import output # type: ignore
+
+        output.enable_custom_widget_manager()
+except ImportError:
+    pass
 
 
 # https://github.com/bqplot/bqplot/blob/e9bae6f3447e2d173112b133406a52e6537c32ee/bqplot/__init__.py#L72-L81
