@@ -11,6 +11,7 @@ import hg.tilesets
 from hg.api import *  # overrides classes with same name from higlass_schema
 from hg.fuse import fuse
 from hg.server import server
+from hg.tilesets import remote
 
 
 def register(tileset_fn):
