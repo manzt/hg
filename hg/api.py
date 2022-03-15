@@ -81,6 +81,7 @@ Track = Union[
 
 TrackT = TypeVar("TrackT", bound=Track)
 
+
 class View(hgs.View[TrackT], _PropertiesMixin, Generic[TrackT]):
     def domain(
         self,
@@ -96,14 +97,10 @@ class View(hgs.View[TrackT], _PropertiesMixin, Generic[TrackT]):
         return view
 
     def __or__(self, other: Union["View[TrackT]", "Viewconf[TrackT]"]):
-        a =  self.viewconf()
-        b = other.viewconf() if isinstance(other, View) else other
-        return a | b
+        return concat(self, other, "h")
 
     def __truediv__(self, other: Union["View[TrackT]", "Viewconf[TrackT]"]):
-        a =  self.viewconf()
-        b = other.viewconf() if isinstance(other, View) else other
-        return a / b
+        return concat(self, other, "v")
 
     def clone(self):
         return utils.copy_unique(self)
@@ -216,45 +213,53 @@ class Viewconf(hgs.Viewconf[View[TrackT]], _PropertiesMixin, Generic[TrackT]):
 
         return conf
 
+    def __or__(
+        self, other: Union[View[TrackT], "Viewconf[TrackT]"]
+    ) -> "Viewconf[TrackT]":
+        return concat(self, other, "h")
 
-    def __or__(self, other: Union[View[TrackT], "Viewconf[TrackT]"]) -> "Viewconf[TrackT]":
-        if isinstance(other, View):
-            views = [other]
-        elif other.views is None:
-            views = []
-        else:
-            views = [v.copy(deep=True) for v in other.views]
+    def __truediv__(
+        self, other: Union[View[TrackT], "Viewconf[TrackT]"]
+    ) -> "Viewconf[TrackT]":
+        return concat(self, other, "v")
 
-        max_x = 0 if self.views is None else max(map(lambda v: v.layout.x + v.layout.w, self.views))
-        for view in views:
-            view.layout.x += max_x
 
-        copy = self.copy(deep=True)
-        if copy.views is None:
-            copy.views = []
+def concat(
+    a: Union[View[TrackT], Viewconf[TrackT]],
+    b: Union[View[TrackT], Viewconf[TrackT]],
+    type_: Literal["h", "v"],
+):
+    a = a.viewconf() if isinstance(a, View) else a
+    assert not a.views is None
 
-        copy.views.extend(views)
-        return copy
+    b = b.viewconf() if isinstance(b, View) else b
+    assert not b.views is None
 
-    def __truediv__(self, other: Union[View[TrackT], "Viewconf[TrackT]"]) -> "Viewconf[TrackT]":
-        if isinstance(other, View):
-            views = [other]
-        elif other.views is None:
-            views = []
-        else:
-            views = [v.copy(deep=True) for v in other.views]
+    if type_ == "v":
+        mapper = lambda view: view.layout.y + view.layout.h
+        field = "y"
+    else:
+        mapper = lambda view: view.layout.x + view.layout.w
+        field = "x"
 
-        max_y = 0 if self.views is None else max(map(lambda v: v.layout.y + v.layout.h, self.views))
-        for view in views:
-            view.layout.y += max_y
+    # gather views and adjust layout
+    views = [v.copy(deep=True) for v in b.views]
+    offset = 0 if a.views is None else max(map(mapper, a.views))
+    for view in views:
+        curr = getattr(view.layout, field)
+        setattr(view.layout, field, curr + offset)
+    a.views.extend(views)
 
-        copy = self.copy(deep=True)
-        if copy.views is None:
-            copy.views = []
-
-        copy.views.extend(views)
-
-        return copy
+    # merge locks
+    for lockattr in ["zoomLocks", "valueScaleLocks", "locationLocks"]:
+        locks = getattr(b, lockattr)
+        if locks:
+            if getattr(a, lockattr) is None:
+                setattr(a, lockattr, locks.copy(deep=True))
+            else:
+                getattr(a, lockattr).locksByViewUid.update(locks.locksByViewUid)
+                getattr(a, lockattr).locksDict.update(locks.locksDict)
+    return a
 
 
 ## Top-level functions to easily create tracks,
