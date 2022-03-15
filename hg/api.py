@@ -1,4 +1,6 @@
 from collections import defaultdict
+import enum
+import functools
 from typing import ClassVar, Generic, List, Optional, Tuple, TypeVar, Union, overload
 
 import higlass_schema as hgs
@@ -97,10 +99,10 @@ class View(hgs.View[TrackT], _PropertiesMixin, Generic[TrackT]):
         return view
 
     def __or__(self, other: Union["View[TrackT]", "Viewconf[TrackT]"]):
-        return concat(self, other, "h")
+        return hconcat(self, other)
 
     def __truediv__(self, other: Union["View[TrackT]", "Viewconf[TrackT]"]):
-        return concat(self, other, "v")
+        return vconcat(self, other)
 
     def clone(self):
         return utils.copy_unique(self)
@@ -216,18 +218,18 @@ class Viewconf(hgs.Viewconf[View[TrackT]], _PropertiesMixin, Generic[TrackT]):
     def __or__(
         self, other: Union[View[TrackT], "Viewconf[TrackT]"]
     ) -> "Viewconf[TrackT]":
-        return concat(self, other, "h")
+        return hconcat(self, other)
 
     def __truediv__(
         self, other: Union[View[TrackT], "Viewconf[TrackT]"]
     ) -> "Viewconf[TrackT]":
-        return concat(self, other, "v")
+        return vconcat(self, other)
 
 
 def concat(
+    method: Literal["horizontal", "vertical"],
     a: Union[View[TrackT], Viewconf[TrackT]],
     b: Union[View[TrackT], Viewconf[TrackT]],
-    type_: Literal["h", "v"],
 ):
     a = a.viewconf() if isinstance(a, View) else a
     assert not a.views is None
@@ -235,12 +237,14 @@ def concat(
     b = b.viewconf() if isinstance(b, View) else b
     assert not b.views is None
 
-    if type_ == "v":
+    if method == "vertical":
         mapper = lambda view: view.layout.y + view.layout.h
         field = "y"
-    else:
+    elif method == "horizontal":
         mapper = lambda view: view.layout.x + view.layout.w
         field = "x"
+    else:
+        raise ValueError("concat method must be 'vertical' or 'horizontal'.")
 
     # gather views and adjust layout
     views = [v.copy(deep=True) for v in b.views]
@@ -260,6 +264,11 @@ def concat(
                 getattr(a, lockattr).locksByViewUid.update(locks.locksByViewUid)
                 getattr(a, lockattr).locksDict.update(locks.locksDict)
     return a
+
+
+hconcat = functools.partial(concat, "horizontal")
+
+vconcat = functools.partial(concat, "vertical")
 
 
 ## Top-level functions to easily create tracks,
