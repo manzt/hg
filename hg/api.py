@@ -1,3 +1,4 @@
+import dataclasses
 from collections import defaultdict
 from typing import ClassVar, Generic, List, Optional, Tuple, TypeVar, Union, overload
 
@@ -81,6 +82,32 @@ Track = Union[
 
 TrackT = TypeVar("TrackT", bound=Track)
 
+@dataclasses.dataclass
+class ViewConcat(Generic[TrackT]):
+    a: Union["View[TrackT]", "ViewConcat[TrackT]"]
+    b: Union["View[TrackT]", "ViewConcat[TrackT]"]
+    type: Literal["horizontal", "vertical"]
+
+    def collect(self) -> List["View[TrackT]"]:
+        a = [self.a.copy(deep=True)] if isinstance(self.a, View) else self.a.collect()
+        b = [self.b.copy(deep=True)] if isinstance(self.b, View) else self.b.collect()
+
+        if self.type == "horizontal":
+            max_x = max(map(lambda v: v.layout.x + v.layout.w, a))
+            for view in b:
+                view.layout.x += max_x
+        else:
+            max_y = max(map(lambda v: v.layout.y + v.layout.h, a))
+            for view in b:
+                view.layout.y += max_y
+        return a + b
+
+    def __or__(self, other: Union["View", "ViewConcat"]):
+        return ViewConcat(self, other, "horizontal")
+
+    def __truediv__(self, other: Union["View", "ViewConcat"]):
+        return ViewConcat(self, other, "vertical")
+
 
 class View(hgs.View[TrackT], _PropertiesMixin, Generic[TrackT]):
     def domain(
@@ -96,25 +123,14 @@ class View(hgs.View[TrackT], _PropertiesMixin, Generic[TrackT]):
             view.initialYDomain = y
         return view
 
-    # TODO: better name? adjust_layout, resize
-    def move(
-        self,
-        x: Optional[int] = None,
-        y: Optional[int] = None,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        inplace: bool = False,
-    ):
-        view = self if inplace else utils.copy_unique(self)
-        if x is not None:
-            view.layout.x = x
-        if y is not None:
-            view.layout.y = y
-        if width is not None:
-            view.layout.w = width
-        if height is not None:
-            view.layout.h = height
-        return view
+    def __or__(self, other: Union["View", "ViewConcat"]):
+        return ViewConcat(self, other, "horizontal")
+
+    def __truediv__(self, other: Union["View", "ViewConcat"]):
+        return ViewConcat(self, other, "vertical")
+
+    def clone(self):
+        return utils.copy_unique(self)
 
 
 ViewT = TypeVar("ViewT", bound=View)
@@ -358,7 +374,7 @@ def project(
 
 
 def viewconf(
-    *_views: View[TrackT],
+    *_views: Union[View[TrackT], ViewConcat[TrackT]],
     views: Optional[List[View[TrackT]]] = None,
     trackSourceServers: Optional[List[str]] = None,
     editable: bool = True,
@@ -367,8 +383,13 @@ def viewconf(
 ) -> Viewconf[TrackT]:
     views = [] if views is None else [v.copy(deep=True) for v in views]
 
-    for view in _views:
-        views.append(view.copy(deep=True))
+    if isinstance(_views[0], ViewConcat):
+        assert len(_views) == 1, "can only pass one ViewConcat"
+        views.extend(_views[0].collect())
+    else:
+        for view in _views:
+            assert isinstance(view, View)
+            views.append(view.copy(deep=True))
 
     if trackSourceServers is None:
         trackSourceServers = ["http://higlass.io/api/v1"]
