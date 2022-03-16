@@ -1,5 +1,4 @@
 from collections import defaultdict
-import enum
 import functools
 from typing import ClassVar, Generic, List, Optional, Tuple, TypeVar, Union, overload
 
