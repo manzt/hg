@@ -121,28 +121,27 @@ class View(hgs.View[TrackT], _PropertiesMixin, Generic[TrackT]):
     def project(
         self,
         from_: "View",
-        to: Literal["center", "top", "bottom", "left", "right"] = "center",
+        position: Literal["center", "top", "bottom", "left", "right"] = "center",
         inplace: bool = False,
         **kwargs,
     ):
         view = self if inplace else utils.copy_unique(self)
 
         # projection track type from position
-        if to == "center":
+        if position == "center":
             track_type = "viewport-projection-center"
-        elif to == "top" or to == "bottom":
+        elif position == "top" or position == "bottom":
             track_type = "viewport-projection-horizontal"
-        elif to == "left" or to == "right":
+        elif position == "left" or position == "right":
             track_type = "viewport-projection-vertical"
         else:
             raise ValueError("Not possible")
 
-
-        if getattr(view.tracks, to) is None:
-            setattr(view.tracks, to, [])
+        if getattr(view.tracks, position) is None:
+            setattr(view.tracks, position, [])
 
         trk = track(type_=track_type, fromViewUid=from_.uid, **kwargs)
-        getattr(view.tracks, to).append(trk)
+        getattr(view.tracks, position).append(trk)
 
         return view
 
