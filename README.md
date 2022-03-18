@@ -44,3 +44,6 @@ view_lock = hg.lock(view1, view2)
 # Concatenate views horizontally and apply synchronization lock
 (view1 | view2).locks(view_lock)
 ```
+
+![Side-by-side Hi-C heatmaps, linked by pan and zoom](https://user-images.githubusercontent.com/24403730/159049810-8132449a-f42f-48f2-8ad8-2c037dce3470.gif)
+
