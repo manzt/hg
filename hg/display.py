@@ -9,18 +9,20 @@ HTML_TEMPLATE = jinja2.Template(
     """
 <!DOCTYPE html>
 <html>
-  <head>
-    <link rel="stylesheet" href="https://esm.sh/higlass@{{ higlass_version }}/dist/hglib.css">
-  </head>
-  <body>
-    <div id="{{ output_div }}"></div>
-  </body>
-  <script type="module">
-    import hglib from "https://esm.sh/higlass@{{ higlass_version }}?deps=react@{{ react_version }},react-dom@{{ react_version }},pixi.js@{{ pixijs_version }}";
-    hglib.viewer(
-      document.getElementById('{{ output_div }}'),
-      JSON.parse({{ spec }}),
-    );
+    <head>
+        <link rel="stylesheet" href="{{ css_url }}">
+    </head>
+    <body>
+        <div id="{{ output_div }}"></div>
+    </body>
+    {% for plugin_url in plugin_urls %}
+        <script src="{{ plugin_url }}"></script>
+    {% endfor %}
+    <script type="module">
+        import hglib from "{{ js_url }}";
+        let el = document.getElementById('{{ output_div }}');
+        lef conf =  JSON.parse({{ spec }});
+        hglib.viewer(el, conf);
     </script>
 </html>
 """
@@ -39,11 +41,14 @@ def spec_to_html(
     json_kwds = json_kwds or {}
     plugin_urls = plugin_urls or []
 
+    base = f"https://esm.sh/higlass@{higlass_version}"
+    js_url = f"{base}?deps=react@{react_version},react-dom@{react_version},pixi.js@{pixijs_version}"
+    css_url = f"{base}/dist/hglib.css"
+
     return HTML_TEMPLATE.render(
         spec=json.dumps(spec, **json_kwds),
-        higlass_version=higlass_version,
-        react_version=react_version,
-        pixijs_version=pixijs_version,
+        js_url=js_url,
+        css_url=css_url,
         output_div=output_div,
         plugin_urls=plugin_urls,
     )
