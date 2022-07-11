@@ -9,20 +9,23 @@ HTML_TEMPLATE = jinja2.Template(
     """
 <!DOCTYPE html>
 <html>
-    <head>
-        <link rel="stylesheet" href="{{ css_url }}">
-    </head>
-    <body>
-        <div id="{{ output_div }}"></div>
-    </body>
+  <head>
+    <link rel="stylesheet" href="https://esm.sh/higlass@{{ higlass_version }}/dist/hglib.css">
+    <script src="https://unpkg.com/requirejs-toggle"></script>
     {% for plugin_url in plugin_urls %}
-        <script src="{{ plugin_url }}"></script>
+    <script src="{{ plugin_url }}"></script>
     {% endfor %}
-    <script type="module">
-        import hglib from "{{ js_url }}";
-        let el = document.getElementById('{{ output_div }}');
-        lef conf =  JSON.parse({{ spec }});
-        hglib.viewer(el, conf);
+    <script src="https://unpkg.com/requirejs-toggle"></script>
+  </head>
+  <body>
+    <div id="{{ output_div }}"></div>
+  </body>
+  <script type="module">
+    import hglib from "https://esm.sh/higlass@{{ higlass_version }}?deps=react@{{ react_version }},react-dom@{{ react_version }},pixi.js@{{ pixijs_version }}";
+    hglib.viewer(
+      document.getElementById('{{ output_div }}'),
+      JSON.parse({{ spec }}),
+    );
     </script>
 </html>
 """
@@ -41,14 +44,11 @@ def spec_to_html(
     json_kwds = json_kwds or {}
     plugin_urls = plugin_urls or []
 
-    base = f"https://esm.sh/higlass@{higlass_version}"
-    js_url = f"{base}?deps=react@{react_version},react-dom@{react_version},pixi.js@{pixijs_version}"
-    css_url = f"{base}/dist/hglib.css"
-
     return HTML_TEMPLATE.render(
         spec=json.dumps(spec, **json_kwds),
-        js_url=js_url,
-        css_url=css_url,
+        higlass_version=higlass_version,
+        react_version=react_version,
+        pixijs_version=pixijs_version,
         output_div=output_div,
         plugin_urls=plugin_urls,
     )
