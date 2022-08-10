@@ -7,6 +7,7 @@ from higlass_schema import *
 
 import hg.tilesets
 from hg.api import *  # overrides classes with same name from higlass_schema
+from hg.chromsizes import Chromsizes
 from hg.fuse import fuse
 from hg.server import server
 from hg.tilesets import remote
