@@ -20,7 +20,7 @@ class Chromsizes(OrderedDict[str, int]):
             len(self),
         )
 
-    def _compute_regions(self, interval: ViewInterval) -> list[GenomicRegion]:
+    def _compute_regions(self, interval: ViewInterval) -> List[GenomicRegion]:
         regions: List[GenomicRegion] = []
         for (chrom, size), offset in zip(self.items(), self.offsets()):
             if overlap(interval, (offset, offset + size)):
@@ -42,7 +42,7 @@ class Chromsizes(OrderedDict[str, int]):
         ...
 
     @overload
-    def convert(self, _from: ViewInterval) -> list[GenomicRegion]:
+    def convert(self, _from: ViewInterval) -> List[GenomicRegion]:
         ...
 
     def convert(
