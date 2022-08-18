@@ -1,10 +1,14 @@
-from typing import Dict, List, Optional, TypeVar, Union
+from __future__ import annotations
+
+import itertools
 import uuid
+from collections import OrderedDict
+from operator import itemgetter
+from typing import Dict, Iterable, List, Optional, Tuple, TypeVar, Union
 
 import higlass_schema as hgs
 from pydantic import BaseModel
 from typing_extensions import Literal
-
 
 T = TypeVar("T")
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -69,3 +73,37 @@ def copy_unique(model: ModelT) -> ModelT:
     if hasattr(copy, "uid"):
         setattr(copy, "uid", uid())
     return copy
+
+
+ViewInterval = Tuple[int, int]
+GenomicRegion = Tuple[str, int, int]
+
+
+def overlap(a: ViewInterval, b: ViewInterval) -> bool:
+    return a[1] >= b[0] and a[0] <= b[1]
+
+
+class GenomicScale:
+    def __init__(self, chromsizes: Iterable[Tuple[str, int]]) -> None:
+        offsets = itertools.accumulate(map(itemgetter(1), chromsizes), initial=0)
+        self._offsets = OrderedDict(
+            (name, (size, offset)) for (name, size), offset in zip(chromsizes, offsets)
+        )
+
+    def __call__(self, region: GenomicRegion) -> ViewInterval:
+        chrom, start, end = region
+        _, offset = self._offsets[chrom]
+        return offset + start, offset + end
+
+    def invert(self, interval: ViewInterval) -> List[GenomicRegion]:
+        start, end = interval
+        regions: List[GenomicRegion] = []
+        for chrom, (size, offset) in self._offsets.items():
+            if overlap((start, end), (offset, offset + size)):
+                region = (
+                    chrom,
+                    max(offset, start) - offset,
+                    min(offset + size, end) - offset,
+                )
+                regions.append(region)
+        return regions
