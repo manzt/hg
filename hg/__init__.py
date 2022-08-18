@@ -11,7 +11,7 @@ from hg.api import *
 from hg.fuse import fuse
 from hg.server import server
 from hg.tilesets import remote
-from hg.utils import GenomicScale
+from hg.utils import Scale 
 
 bigwig = server.register(hg.tilesets.bigwig)
 multivec = server.register(hg.tilesets.multivec)

@@ -83,7 +83,7 @@ def overlap(a: ViewInterval, b: ViewInterval) -> bool:
     return a[1] >= b[0] and a[0] <= b[1]
 
 
-class GenomicScale:
+class Scale:
     def __init__(self, chromsizes: Iterable[Tuple[str, int]]) -> None:
         offsets = itertools.accumulate(map(itemgetter(1), chromsizes), initial=0)
         self._offsets = OrderedDict(
