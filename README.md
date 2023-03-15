@@ -1,3 +1,5 @@
+> **Note** [**2023-03-14**] `hg` has a new home (and an official release!) under [`higlass/higlass-python`](https://github.com/higlass/higlass-python). This repo is now read-only 🚀
+
 # hg 🔎
 
 a fresh python library for [`higlass`](https://github.com/higlass/higlass) built 
